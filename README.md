@@ -1,3 +1,15 @@
+## Version
+
+**v1.0.0 – Initial stable release**
+
+This version includes:
+- User authentication
+- Record create / edit / delete
+- File upload per record
+- Cancel & restore system
+- Basic audit logging
+
+
 # PHP Record & File Manager
 
 A lightweight PHP + MySQL record management system with:
