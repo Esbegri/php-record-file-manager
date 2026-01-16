@@ -1,0 +1,12 @@
+# Uploads (do not commit user files)
+storage/uploads/
+uploads/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
