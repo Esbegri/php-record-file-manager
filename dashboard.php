@@ -3,7 +3,8 @@
 session_start();
 require_once 'unauthorized.php';
 
-$role = $_SESSION['role'] ?? '0'; // 1 = admin
+$role = $_SESSION['role'] ?? 'user'; // admin = admin
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -73,20 +74,26 @@ $(document).ready(function () {
         <ul class="navbar-nav mr-auto">
             <li class="nav-item active ml-4">
             <?php
-            if ($role === '1') {
-                echo '
-                <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#modalCreateRecord">
-                    <i class="fas fa-plus-circle mr-1"></i>Add New Record
-                </button> &nbsp;&nbsp;
+            if ($role === 'admin') {
+				echo '
+				<button type="button" class="btn btn-primary" data-toggle="modal" data-target="#modalCreateRecord">
+					<i class="fas fa-plus-circle mr-1"></i>Add New Record
+				</button> &nbsp;&nbsp;
 
-                <button type="button" class="btn btn-secondary" data-toggle="modal" data-target="#modalDeleteRecord">
-                    <i class="fas fa-trash-alt mr-1"></i>Delete Record
-                </button> &nbsp;&nbsp;
+				<button type="button" class="btn btn-secondary" data-toggle="modal" data-target="#modalDeleteRecord">
+					<i class="fas fa-trash-alt mr-1"></i>Delete Record
+				</button> &nbsp;&nbsp;
 
-                <button type="button" class="btn btn-info" data-toggle="modal" data-target="#modalChangePassword">
-                    <i class="fas fa-key mr-1"></i>Change Password
-                </button>';
-            }
+				<button type="button" class="btn btn-info" data-toggle="modal" data-target="#modalChangePassword">
+					<i class="fas fa-key mr-1"></i>Change Password
+				</button> &nbsp;&nbsp;
+
+				<a class="btn btn-dark" href="advanced_search.php" target="_blank" rel="noopener">
+				  <i class="fas fa-search mr-1"></i>Advanced Search
+				</a>
+				';
+}
+
             ?>
             </li>
         </ul>
@@ -481,6 +488,10 @@ function confirmDelete() {
     </div>
   </div>
 </div>
+
+
+
+
 
 </body>
 </html>
