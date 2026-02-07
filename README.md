@@ -1,90 +1,26 @@
-## Version
+# 📂 PHP Record & File Manager v2.0 (Modernized)
 
-**v1.0.0 – Initial stable release**
+A secure, modular, and lightweight PHP + MySQL record management system.
 
-This version includes:
-- User authentication
-- Record create / edit / delete
-- File upload per record
-- Cancel & restore system
-- Basic audit logging
+## ✨ Key Enhancements in v2.0
+- **Modular Architecture:** Separated logic into `app/`, `config/`, and `views/` for better maintainability.
+- **PDO Integration:** Transitioned from mysqli to PDO for robust SQL injection protection.
+- **Secure File Handling:** Files are stored outside public access and served via an authenticated PHP stream.
+- **Improved UI:** Fully responsive dashboard with Bootstrap 4 and Dynamic Modals.
+- **Security Hardening:** CSRF protection, secure sessions, and environment-aware file paths.
 
+## 🛠️ Tech Stack
+- **Backend:** PHP 8.x (PDO, Session Security)
+- **Database:** MySQL (MariaDB)
+- **Frontend:** Bootstrap 4, DataTables, FontAwesome 6
 
-# PHP Record & File Manager
+## 🚀 Installation (XAMPP)
+1. Clone the repository to `C:\xampp\htdocs\kayit`.
+2. Configure your database in `config/config.php` (Rename from `config.php.example` if needed).
+3. Import `schema.sql` via phpMyAdmin.
+4. Ensure `storage/uploads` is writable.
+5. Visit `http://localhost/kayit/login_form.php`.
 
-A lightweight PHP + MySQL record management system with:
-- Record creation & editing
-- File upload per record
-- Secure file view/download via PHP (not direct public links)
-- Cancel / Restore workflow
-- Soft Delete + deletion audit log
-- Update audit log
-- Login system with password hashing (`password_hash` / `password_verify`)
-
-## Tech Stack
-- PHP (plain PHP)
-- MySQL (XAMPP)
-- Bootstrap 4
-- DataTables
-
-## Features
-- **Create records** with unique `file_no`
-- **Upload files** to `storage/uploads/{recordId}/`
-- **View/Download files** via `file.php` (access-controlled)
-- **Cancel** a record with reason (and restore)
-- **Soft delete** with reason + deletion log
-- **Audit logs**
-  - `record_changes` for updates
-  - `record_deletions` for deletes
-
-## Setup (XAMPP)
-1. Copy project folder to:
-   `C:\xampp\htdocs\kayit`
-
-2. Create upload directory:
-   `C:\xampp\htdocs\kayit\storage\uploads`
-
-3. Import database:
-   - Open phpMyAdmin
-   - Import `schema.sql`
-   - This creates database: `belge`
-
-4. Create an admin user
-   - Generate a password hash:
-     - Create `make_hash.php` with:
-       ```php
-       <?php echo password_hash("Admin123!", PASSWORD_DEFAULT);
-       ```
-     - Open: `http://localhost/kayit/make_hash.php`
-     - Copy the output hash and delete `make_hash.php`
-   - Insert user:
-     ```sql
-     INSERT INTO users (username, password_hash, role)
-     VALUES ('admin', '<PASTE_HASH_HERE>', '1');
-     ```
-
-5. Run the app:
-   - Login page:
-     `http://localhost/kayit/login_form.php`
-
-## Default Pages
-- `login_form.php` – login UI
-- `login.php` – login handler
-- `logout.php` – logout
-- `dashboard.php` – main table + actions
-- `create_record.php` – create record
-- `edit_record.php` / `update_record.php` – edit workflow
-- `upload_file.php` – upload handler
-- `view_record.php` – list files for a record
-- `file.php` – secure file streaming
-- `cancel_record.php` / `restore_record.php` – cancel/restore
-- `delete_record.php` – soft delete
-
-## Security Notes
-- All DB writes use prepared statements.
-- Passwords are stored as hashes only.
-- Session does not store passwords.
-- Uploaded files are stored outside direct public linking and served via PHP with authorization checks.
-
-## License
-MIT (optional)
+## 🔒 Security
+- Use `.gitignore` to prevent sensitive `config.php` and user uploads from being public.
+- Passwords hashed via `password_hash()`.
