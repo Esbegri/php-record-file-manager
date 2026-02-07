@@ -1,194 +1,151 @@
 <?php
-session_start();
-require_once 'unauthorized.php';
+/**
+ * edit_record.php
+ * Fetch and update existing records using PDO.
+ */
 
-// Expect record id from POST (dashboard sends name="id")
-if (!isset($_POST['id'])) {
-    header('Location: dashboard.php');
-    exit;
-}
+require __DIR__ . '/app/bootstrap.php';
 
-$recordId = (int)$_POST['id'];
+// Access Control
+require_login();
+
+// 1. Validate Record ID
+$recordId = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
 if ($recordId <= 0) {
     header('Location: dashboard.php');
     exit;
 }
 
-// Database connection
-$conn = new mysqli('localhost', 'root', '', 'belge');
-if ($conn->connect_error) {
-    die('Database connection error.');
-}
-$conn->set_charset('utf8');
+// 2. Handle POST Request (Update logic)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
+    csrf_verify(); // Security check
 
-// Fetch record securely
-$stmt = $conn->prepare("
-    SELECT
-        file_no,
-        national_id,
-        first_name,
-        last_name,
-        gender,
-        category,
-        date_of_birth,
-        date_of_death,
-        mother_name,
-        father_name,
-        department,
-        notes
-    FROM records
-    WHERE id = ?
-");
-$stmt->bind_param('i', $recordId);
-$stmt->execute();
-$result = $stmt->get_result();
+    try {
+        $sql = "UPDATE records SET 
+                national_id = ?, first_name = ?, last_name = ?, 
+                file_no = ?, gender = ?, date_of_birth = ?, 
+                date_of_death = ?, mother_name = ?, father_name = ?, 
+                department = ?, category = ?, notes = ? 
+                WHERE id = ?";
 
-if ($result->num_rows === 0) {
-    $stmt->close();
-    $conn->close();
-    header('Location: dashboard.php');
-    exit;
-}
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            trim($_POST['national_id'] ?? ''),
+            mb_strtoupper(trim($_POST['first_name'] ?? '')),
+            mb_strtoupper(trim($_POST['last_name'] ?? '')),
+            mb_strtoupper(trim($_POST['file_no'] ?? '')),
+            $_POST['gender'] ?? '',
+            !empty($_POST['date_of_birth']) ? $_POST['date_of_birth'] : null,
+            !empty($_POST['date_of_death']) ? $_POST['date_of_death'] : null,
+            mb_strtoupper(trim($_POST['mother_name'] ?? '')),
+            mb_strtoupper(trim($_POST['father_name'] ?? '')),
+            mb_strtoupper(trim($_POST['department'] ?? '')),
+            $_POST['category'] ?? 'NORMAL',
+            trim($_POST['notes'] ?? ''),
+            $recordId
+        ]);
 
-$record = $result->fetch_assoc();
-$stmt->close();
-$conn->close();
-
-// Safe output (XSS protection)
-$fileNo      = htmlspecialchars($record['file_no'] ?? '', ENT_QUOTES, 'UTF-8');
-$nationalId  = htmlspecialchars($record['national_id'] ?? '', ENT_QUOTES, 'UTF-8');
-$firstName   = htmlspecialchars($record['first_name'] ?? '', ENT_QUOTES, 'UTF-8');
-$lastName    = htmlspecialchars($record['last_name'] ?? '', ENT_QUOTES, 'UTF-8');
-$gender      = strtoupper($record['gender'] ?? '');
-$dob         = htmlspecialchars($record['date_of_birth'] ?? '', ENT_QUOTES, 'UTF-8');
-$dod         = htmlspecialchars($record['date_of_death'] ?? '', ENT_QUOTES, 'UTF-8');
-$motherName  = htmlspecialchars($record['mother_name'] ?? '', ENT_QUOTES, 'UTF-8');
-$fatherName  = htmlspecialchars($record['father_name'] ?? '', ENT_QUOTES, 'UTF-8');
-$department  = htmlspecialchars($record['department'] ?? '', ENT_QUOTES, 'UTF-8');
-$notes       = htmlspecialchars($record['notes'] ?? '', ENT_QUOTES, 'UTF-8');
-$category    = strtoupper($record['category'] ?? '');
-
-// Category selected
-$catNormal = $catExEntry = $catLegal = $catFetus = '';
-switch ($category) {
-    case 'NORMAL':     $catNormal = 'selected'; break;
-    case 'EX_ENTRY':   $catExEntry = 'selected'; break;
-    case 'LEGAL_CASE': $catLegal = 'selected'; break;
-    case 'FETUS':      $catFetus = 'selected'; break;
-    default:           $catNormal = 'selected'; break;
+        header('Location: dashboard.php?status=updated');
+        exit;
+    } catch (PDOException $e) {
+        $error = "Update failed: " . $e->getMessage();
+    }
 }
 
-// Gender selected
-$genderMale = $genderFemale = '';
-if ($gender === 'M' || $gender === 'MALE') $genderMale = 'selected';
-else $genderFemale = 'selected';
+// 3. Fetch Record Data (Display logic)
+try {
+    $stmt = $pdo->prepare("SELECT * FROM records WHERE id = ?");
+    $stmt->execute([$recordId]);
+    $record = $stmt->fetch();
+
+    if (!$record) {
+        header('Location: dashboard.php?error=not_found');
+        exit;
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Language" content="en">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-<title>Edit Record</title>
+    <meta charset="UTF-8">
+    <title>Edit Record #<?= $recordId ?></title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
-<body class="bg-light">
+<body class="bg-light p-4">
 
 <div class="container">
-  <div class="row justify-content-center">
-    <div class="col-md-8">
-      <div class="card mt-4">
-        <div class="card-header">
-          <h5 class="mb-0">EDIT RECORD (ID: <?php echo (int)$recordId; ?>)</h5>
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between">
+                    <h5 class="mb-0">Edit Record: <?= htmlspecialchars($record['file_no']) ?></h5>
+                    <a href="dashboard.php" class="text-white">&times;</a>
+                </div>
+                <div class="card-body">
+                    <form action="edit_record.php" method="POST">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="id" value="<?= $recordId ?>">
+                        <input type="hidden" name="update_record" value="1">
+
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label>File Number</label>
+                                <input type="text" class="form-control" name="file_no" value="<?= htmlspecialchars($record['file_no']) ?>" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>National ID</label>
+                                <input type="text" class="form-control" name="national_id" value="<?= htmlspecialchars($record['national_id']) ?>">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label>First Name</label>
+                                <input type="text" class="form-control" name="first_name" value="<?= htmlspecialchars($record['first_name']) ?>">
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>Last Name</label>
+                                <input type="text" class="form-control" name="last_name" value="<?= htmlspecialchars($record['last_name']) ?>">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label>Gender</label>
+                                <select class="form-control" name="gender">
+                                    <option value="MALE" <?= $record['gender'] == 'MALE' ? 'selected' : '' ?>>MALE</option>
+                                    <option value="FEMALE" <?= $record['gender'] == 'FEMALE' ? 'selected' : '' ?>>FEMALE</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>Category</label>
+                                <select class="form-control" name="category">
+                                    <?php 
+                                    $categories = ['NORMAL', 'EX_ENTRY', 'LEGAL_CASE', 'FETUS'];
+                                    foreach($categories as $cat): ?>
+                                        <option value="<?= $cat ?>" <?= $record['category'] == $cat ? 'selected' : '' ?>><?= $cat ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Notes</label>
+                            <textarea class="form-control" name="notes" rows="3"><?= htmlspecialchars($record['notes']) ?></textarea>
+                        </div>
+
+                        <div class="mt-4 text-right">
+                            <a href="dashboard.php" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-success px-4">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
-
-        <div class="card-body">
-          <form action="update_record.php" method="POST">
-
-            <!-- Hidden ID: which record will be updated -->
-            <input type="hidden" name="id" value="<?php echo (int)$recordId; ?>">
-
-            <div class="form-group">
-              <label>National ID</label>
-              <input type="text" class="form-control" name="national_id" value="<?php echo $nationalId; ?>">
-            </div>
-
-            <div class="form-group">
-              <label>File No (read-only)</label>
-              <input type="text" class="form-control" value="<?php echo $fileNo; ?>" readonly>
-            </div>
-
-            <div class="form-group">
-              <label>First Name</label>
-              <input type="text" class="form-control" name="first_name" value="<?php echo $firstName; ?>">
-            </div>
-
-            <div class="form-group">
-              <label>Last Name</label>
-              <input type="text" class="form-control" name="last_name" value="<?php echo $lastName; ?>">
-            </div>
-
-            <div class="form-group">
-              <label>Gender</label>
-              <select class="custom-select" name="gender">
-                <option value="M" <?php echo $genderMale; ?>>MALE</option>
-                <option value="F" <?php echo $genderFemale; ?>>FEMALE</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>Date of Birth</label>
-              <input type="date" class="form-control" name="date_of_birth" value="<?php echo $dob; ?>">
-            </div>
-
-            <div class="form-group">
-              <label>Date of Death</label>
-              <input type="date" class="form-control" name="date_of_death" value="<?php echo $dod; ?>">
-            </div>
-
-            <div class="form-group">
-              <label>Mother Name</label>
-              <input type="text" class="form-control" name="mother_name" value="<?php echo $motherName; ?>">
-            </div>
-
-            <div class="form-group">
-              <label>Father Name</label>
-              <input type="text" class="form-control" name="father_name" value="<?php echo $fatherName; ?>">
-            </div>
-
-            <div class="form-group">
-              <label>Department</label>
-              <input type="text" class="form-control" name="department" value="<?php echo $department; ?>">
-            </div>
-
-            <div class="form-group">
-              <label>Category</label>
-              <select class="custom-select" name="category">
-                <option value="NORMAL" <?php echo $catNormal; ?>>NORMAL</option>
-                <option value="EX_ENTRY" <?php echo $catExEntry; ?>>EX ENTRY</option>
-                <option value="LEGAL_CASE" <?php echo $catLegal; ?>>LEGAL CASE</option>
-                <option value="FETUS" <?php echo $catFetus; ?>>FETUS</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>Notes</label>
-              <input type="text" class="form-control" name="notes" value="<?php echo $notes; ?>">
-            </div>
-
-            <div class="text-right">
-              <a href="dashboard.php" class="btn btn-secondary">Close</a>
-              <button type="submit" class="btn btn-primary">Save</button>
-            </div>
-
-          </form>
-        </div>
-      </div>
     </div>
-  </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -1,56 +1,55 @@
 <?php
-session_start();
+/**
+ * login.php
+ * Handles user authentication, password verification, and session management.
+ */
 
-// Read inputs
+require __DIR__ . '/app/bootstrap.php';
+
+// If user is already logged in, redirect to dashboard
+if (!empty($_SESSION['user'])) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+// Read and sanitize inputs
 $username = isset($_POST['username']) ? trim($_POST['username']) : '';
 $password = isset($_POST['password']) ? (string)$_POST['password'] : '';
 
 // Basic validation
 if ($username === '' || $password === '') {
-    header('Location: login_form.php?error=1');
+    header('Location: login_form.php?error=empty_fields');
     exit;
 }
 
-// DB
-$conn = new mysqli('localhost', 'root', '', 'belge');
-$conn->set_charset('utf8');
+try {
+    // Fetch user details using the centralized PDO instance
+    $stmt = $pdo->prepare('SELECT password_hash, role FROM users WHERE username = ? LIMIT 1');
+    $stmt->execute([$username]);
+    $user = $stmt->fetch();
 
-if ($conn->connect_error) {
-    // Don't expose connection details
-    header('Location: login_form.php?error=1');
-    exit;
-}
+    if ($user) {
+        // Verify the provided password against the stored hash
+        if (password_verify($password, $user['password_hash'])) {
+            
+            // Set session variables
+            $_SESSION['user'] = $username;
+            $_SESSION['role'] = (int)$user['role'];
 
-// Fetch user
-$stmt = $conn->prepare('SELECT password_hash, role FROM users WHERE username = ? LIMIT 1');
-$stmt->bind_param('s', $username);
-$stmt->execute();
-$stmt->store_result();
+            // Security: Regenerate session ID to prevent Session Fixation attacks
+            session_regenerate_id(true);
 
-if ($stmt->num_rows === 1) {
-    $stmt->bind_result($passwordHash, $role);
-    $stmt->fetch();
-
-    // Verify password
-    if (password_verify($password, $passwordHash)) {
-        // Session standard
-        $_SESSION['user'] = $username;
-        $_SESSION['role'] = (string)$role;
-
-        // Optional: regenerate session ID to prevent fixation
-        session_regenerate_id(true);
-
-        $stmt->close();
-        $conn->close();
-
-        header('Location: dashboard.php');
-        exit;
+            header('Location: dashboard.php');
+            exit;
+        }
     }
+
+    // Generic error message for security (don't specify if user or password was wrong)
+    header('Location: login_form.php?error=invalid_credentials');
+    exit;
+
+} catch (PDOException $e) {
+    // In production, log $e->getMessage() and show a generic error
+    header('Location: login_form.php?error=server_error');
+    exit;
 }
-
-$stmt->close();
-$conn->close();
-
-// Generic error (do not reveal whether username exists)
-header('Location: login_form.php?error=1');
-exit;

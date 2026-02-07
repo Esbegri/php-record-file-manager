@@ -1,94 +1,81 @@
 <?php
-session_start();
-require_once 'unauthorized.php';
+/**
+ * upload_file.php
+ * Handles secure file uploads for specific records.
+ */
 
-// Accept record ID from POST
-$recordId = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+require __DIR__ . '/app/bootstrap.php';
+
+// Access Control
+require_login();
+csrf_verify();
+
+// 1. Validate Record ID
+$recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
 
 if ($recordId <= 0) {
-    echo '<div class="alert alert-danger text-center">Invalid record ID.</div>';
-    header('refresh:2; url=dashboard.php');
+    header('Location: dashboard.php?error=invalid_id');
     exit;
 }
 
-if (!isset($_FILES['file']) || empty($_FILES['file']['name'])) {
-    echo '<div class="alert alert-warning text-center">No file selected.</div>';
-    header('refresh:2; url=dashboard.php');
+// 2. Validate Upload Existence
+if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+    header('Location: dashboard.php?error=upload_failed');
     exit;
 }
 
-// Basic upload checks
-if ($_FILES['file']['error'] !== UPLOAD_ERR_OK) {
-    echo '<div class="alert alert-danger text-center">Upload failed. Please try again.</div>';
-    header('refresh:2; url=dashboard.php');
-    exit;
-}
-
-// Limits & allowed types
+// 3. Define Constraints
 $maxBytes = 10 * 1024 * 1024; // 10MB
+$allowedMimes = ['application/pdf', 'image/jpeg', 'image/png'];
 $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
 
-if ($_FILES['file']['size'] > $maxBytes) {
-    echo '<div class="alert alert-warning text-center">File size limit exceeded (max 10MB).</div>';
-    header('refresh:2; url=dashboard.php');
-    exit;
-}
-
+// 4. File Checks (Size, Extension, and MIME Type)
+$fileSize = $_FILES['file']['size'];
 $originalName = $_FILES['file']['name'];
 $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
 
-if (!in_array($extension, $allowedExtensions, true)) {
-    echo '<div class="alert alert-warning text-center">Invalid file type. Allowed: PDF, JPG, PNG.</div>';
-    header('refresh:2; url=dashboard.php');
+// Check Size
+if ($fileSize > $maxBytes) {
+    header('Location: dashboard.php?error=file_too_large');
     exit;
 }
 
-// (Optional but better) MIME check
+// Check Extension
+if (!in_array($extension, $allowedExtensions)) {
+    header('Location: dashboard.php?error=invalid_extension');
+    exit;
+}
+
+// Check actual file content (MIME)
 $finfo = new finfo(FILEINFO_MIME_TYPE);
 $mime = $finfo->file($_FILES['file']['tmp_name']);
-$allowedMimes = [
-    'application/pdf',
-    'image/jpeg',
-    'image/png'
-];
-if (!in_array($mime, $allowedMimes, true)) {
-    echo '<div class="alert alert-warning text-center">Invalid file content.</div>';
-    header('refresh:2; url=dashboard.php');
+
+if (!in_array($mime, $allowedMimes)) {
+    header('Location: dashboard.php?error=invalid_mime');
     exit;
 }
 
-// Create target directory: /storage/uploads/{recordId}/
+// 5. Secure Storage Logic
 $targetDir = __DIR__ . '/storage/uploads/' . $recordId;
 if (!is_dir($targetDir)) {
     mkdir($targetDir, 0777, true);
 }
 
-// Safe stored filename (avoid using original filename)
-$storedName = 'file_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $extension;
+// Generate a safe, random filename to prevent overwrites or execution attacks
+$storedName = 'doc_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
 $targetPath = $targetDir . DIRECTORY_SEPARATOR . $storedName;
 
-if (!move_uploaded_file($_FILES['file']['tmp_name'], $targetPath)) {
-    echo '<div class="alert alert-danger text-center">Failed to save the uploaded file.</div>';
-    header('refresh:2; url=dashboard.php');
-    exit;
+if (move_uploaded_file($_FILES['file']['tmp_name'], $targetPath)) {
+    try {
+        // Update database using the centralized PDO instance
+        $stmt = $pdo->prepare("UPDATE records SET has_file = 1 WHERE id = ?");
+        $stmt->execute([$recordId]);
+
+        header('Location: dashboard.php?status=upload_success');
+    } catch (PDOException $e) {
+        header('Location: dashboard.php?error=db_error');
+    }
+} else {
+    header('Location: dashboard.php?error=save_failed');
 }
-
-// DB update: mark record has_file = 1
-$conn = new mysqli('localhost', 'root', '', 'belge');
-$conn->set_charset('utf8');
-
-if ($conn->connect_error) {
-    echo '<div class="alert alert-warning text-center">File uploaded, but database connection failed.</div>';
-    header('refresh:2; url=dashboard.php');
-    exit;
-}
-
-$stmt = $conn->prepare('UPDATE records SET has_file = 1 WHERE id = ?');
-$stmt->bind_param('i', $recordId);
-$stmt->execute();
-$stmt->close();
-$conn->close();
-
-echo '<div class="alert alert-success text-center">File uploaded successfully.</div>';
-header('refresh:2; url=dashboard.php');
 exit;

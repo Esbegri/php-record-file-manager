@@ -1,72 +1,54 @@
 <?php
-session_start();
-require_once 'unauthorized.php';
+/**
+ * cancel_record.php
+ * Handles the cancellation of a record with a provided reason.
+ */
 
-// Input validation
+require __DIR__ . '/app/bootstrap.php';
+
+// Access Control
+require_login();
+csrf_verify(); // Ensure the request is secure
+
+// Input Validation
 $recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-$cancelReasonRaw = isset($_POST['cancel_reason']) ? trim($_POST['cancel_reason']) : '';
+$cancelReason = isset($_POST['cancel_reason']) ? trim($_POST['cancel_reason']) : '';
 
-if ($recordId <= 0 || $cancelReasonRaw === '') {
-    echo "<div class='alert alert-danger text-center'>Invalid or missing data provided.</div>";
-    header('refresh:2; url=dashboard.php');
+if ($recordId <= 0 || $cancelReason === '') {
+    header('Location: dashboard.php?error=invalid_input');
     exit;
 }
 
+// Set metadata
 date_default_timezone_set('Europe/Istanbul');
 $cancelledAt = date('Y-m-d H:i:s');
 $cancelledBy = $_SESSION['user'] ?? 'system';
 
-// Database connection
-$conn = new mysqli('localhost', 'root', '', 'belge');
-$conn->set_charset('utf8');
+try {
+    // Update record status using PDO
+    $sql = "UPDATE records 
+            SET cancelled = 1, 
+                cancel_reason = ?, 
+                cancelled_at = ?, 
+                cancelled_by = ? 
+            WHERE id = ?";
+            
+    $stmt = $pdo->prepare($sql);
+    $success = $stmt->execute([
+        $cancelReason, 
+        $cancelledAt, 
+        $cancelledBy, 
+        $recordId
+    ]);
 
-if ($conn->connect_error) {
-    echo "<div class='alert alert-danger text-center'>Database connection failed.</div>";
-    header('refresh:2; url=dashboard.php');
-    exit;
+    if ($success) {
+        header('Location: dashboard.php?status=record_cancelled');
+    } else {
+        header('Location: dashboard.php?error=update_failed');
+    }
+
+} catch (PDOException $e) {
+    // In production, log the error message: $e->getMessage()
+    header('Location: dashboard.php?error=db_error');
 }
-
-// Secure update with prepared statement
-$stmt = $conn->prepare("
-    UPDATE records
-    SET
-        cancelled = 1,
-        cancel_reason = ?,
-        cancelled_at = ?,
-        cancelled_by = ?
-    WHERE id = ?
-");
-
-$stmt->bind_param('sssi', $cancelReasonRaw, $cancelledAt, $cancelledBy, $recordId);
-$ok = $stmt->execute();
-
-$stmt->close();
-$conn->close();
-
-// Safe output
-$cancelReasonSafe = htmlspecialchars($cancelReasonRaw, ENT_QUOTES, 'UTF-8');
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="refresh" content="2;url=dashboard.php">
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-  <title>Cancel Record</title>
-  <style>
-    body { background:#f8f9fa; display:flex; justify-content:center; align-items:center; height:100vh; }
-  </style>
-</head>
-<body>
-  <div class="text-center">
-    <?php if ($ok): ?>
-      <h3 class="text-danger">Record has been cancelled</h3>
-      <p><strong>Cancellation Reason:</strong> <?php echo $cancelReasonSafe; ?></p>
-      <p class="small text-muted">Redirecting to dashboard...</p>
-    <?php else: ?>
-      <h3 class="text-danger">Cancellation failed</h3>
-      <p class="small text-muted">Redirecting to dashboard...</p>
-    <?php endif; ?>
-  </div>
-</body>
-</html>
+exit;

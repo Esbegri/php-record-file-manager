@@ -1,117 +1,68 @@
 <?php
-session_start();
-require_once 'unauthorized.php';
+/**
+ * update_record.php
+ * Handles the server-side logic for updating an existing record.
+ */
 
-// Validate ID
+require __DIR__ . '/app/bootstrap.php';
+
+// Access Control
+require_login();
+csrf_verify(); // Ensure security against CSRF attacks
+
+// 1. Validate Record ID
 $recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
 if ($recordId <= 0) {
-    die("Invalid request: record ID not found.");
+    header('Location: dashboard.php?error=invalid_id');
+    exit;
 }
 
-// Read inputs (match edit_record.php)
-$nationalId   = isset($_POST['national_id']) ? mb_strtoupper(trim($_POST['national_id'])) : '';
-$firstName    = isset($_POST['first_name']) ? mb_strtoupper(trim($_POST['first_name'])) : '';
-$lastName     = isset($_POST['last_name']) ? mb_strtoupper(trim($_POST['last_name'])) : '';
-$gender       = isset($_POST['gender']) ? mb_strtoupper(trim($_POST['gender'])) : '';
-$dateOfBirth  = $_POST['date_of_birth'] ?? null; // YYYY-MM-DD
-$dateOfDeath  = $_POST['date_of_death'] ?? null; // YYYY-MM-DD
-$motherName   = isset($_POST['mother_name']) ? mb_strtoupper(trim($_POST['mother_name'])) : '';
-$fatherName   = isset($_POST['father_name']) ? mb_strtoupper(trim($_POST['father_name'])) : '';
-$department   = isset($_POST['department']) ? mb_strtoupper(trim($_POST['department'])) : '';
-$category     = isset($_POST['category']) ? mb_strtoupper(trim($_POST['category'])) : '';
-$notes        = isset($_POST['notes']) ? trim($_POST['notes']) : '';
+// 2. Sanitize and Map Inputs
+$nationalId   = mb_strtoupper(trim($_POST['national_id'] ?? ''));
+$firstName    = mb_strtoupper(trim($_POST['first_name'] ?? ''));
+$lastName     = mb_strtoupper(trim($_POST['last_name'] ?? ''));
+$fileNo       = mb_strtoupper(trim($_POST['file_no'] ?? ''));
+$gender       = mb_strtoupper(trim($_POST['gender'] ?? ''));
+$dateOfBirth  = !empty($_POST['date_of_birth']) ? $_POST['date_of_birth'] : null;
+$dateOfDeath  = !empty($_POST['date_of_death']) ? $_POST['date_of_death'] : null;
+$motherName   = mb_strtoupper(trim($_POST['mother_name'] ?? ''));
+$fatherName   = mb_strtoupper(trim($_POST['father_name'] ?? ''));
+$department   = mb_strtoupper(trim($_POST['department'] ?? ''));
+$category     = mb_strtoupper(trim($_POST['category'] ?? ''));
+$notes        = trim($_POST['notes'] ?? '');
 
+$changedBy    = $_SESSION['user'] ?? 'system';
 date_default_timezone_set('Europe/Istanbul');
-$changedAt = date('Y-m-d H:i:s');
-$changedBy = $_SESSION['user'] ?? 'UNKNOWN';
+$changedAt    = date('Y-m-d H:i:s');
 
-// Database connection
-$conn = new mysqli('localhost', 'root', '', 'belge');
-$conn->set_charset('utf8');
+try {
+    // 3. Update Record using PDO
+    $sql = "UPDATE records SET 
+                national_id = ?, first_name = ?, last_name = ?, 
+                file_no = ?, gender = ?, date_of_birth = ?, 
+                date_of_death = ?, mother_name = ?, father_name = ?, 
+                department = ?, category = ?, notes = ? 
+            WHERE id = ?";
 
-if ($conn->connect_error) {
-    die("Database connection error.");
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([
+        $nationalId, $firstName, $lastName, $fileNo, $gender,
+        $dateOfBirth, $dateOfDeath, $motherName, $fatherName,
+        $department, $category, $notes, $recordId
+    ]);
+
+    // 4. Log the Change (Optional Audit Trail)
+    if ($stmt->rowCount() >= 0) { // rowCount might be 0 if no data actually changed
+        $logSql = "INSERT INTO record_changes (record_id, changed_at, changed_by) VALUES (?, ?, ?)";
+        $pdo->prepare($logSql)->execute([$recordId, $changedAt, $changedBy]);
+
+        header('Location: dashboard.php?status=updated');
+    } else {
+        header('Location: dashboard.php?error=not_found');
+    }
+
+} catch (PDOException $e) {
+    // In production, log $e->getMessage() for debugging
+    header('Location: dashboard.php?error=db_error');
 }
-
-// Update record (prepared statement)
-$stmt = $conn->prepare("
-    UPDATE records
-    SET
-        national_id = ?,
-        first_name = ?,
-        last_name = ?,
-        gender = ?,
-        date_of_birth = ?,
-        date_of_death = ?,
-        mother_name = ?,
-        father_name = ?,
-        department = ?,
-        category = ?,
-        notes = ?
-    WHERE id = ?
-");
-
-$stmt->bind_param(
-    "sssssssssssi",
-    $nationalId,
-    $firstName,
-    $lastName,
-    $gender,
-    $dateOfBirth,
-    $dateOfDeath,
-    $motherName,
-    $fatherName,
-    $department,
-    $category,
-    $notes,
-    $recordId
-);
-
-$stmt->execute();
-
-$changeLogInserted = false;
-
-// If something changed, log it
-if ($stmt->affected_rows > 0) {
-    $logStmt = $conn->prepare("
-        INSERT INTO record_changes (record_id, changed_at, changed_by)
-        VALUES (?, ?, ?)
-    ");
-    $logStmt->bind_param("iss", $recordId, $changedAt, $changedBy);
-    $logStmt->execute();
-    $logStmt->close();
-
-    $changeLogInserted = true;
-}
-
-$stmt->close();
-$conn->close();
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta http-equiv="refresh" content="3;url=dashboard.php">
-<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-<title>Update Status</title>
-</head>
-<body class="bg-light d-flex justify-content-center align-items-center" style="height:100vh;">
-
-<div class="card shadow-lg border-0 p-4" style="width: 420px;">
-    <?php if ($changeLogInserted): ?>
-        <div class="alert alert-success text-center mb-0">
-            <h5 class="mb-2">✅ Update Successful</h5>
-            <p>The record has been updated successfully.</p>
-            <p class="small text-muted">You will be redirected to the dashboard in 3 seconds...</p>
-        </div>
-    <?php else: ?>
-        <div class="alert alert-warning text-center mb-0">
-            <h5 class="mb-2">ℹ️ No Changes Detected</h5>
-            <p>The data was unchanged, or the update did not affect any rows.</p>
-            <p class="small text-muted">You will be redirected to the dashboard in 3 seconds...</p>
-        </div>
-    <?php endif; ?>
-</div>
-
-</body>
-</html>
+exit;

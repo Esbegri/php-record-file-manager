@@ -1,69 +1,50 @@
 <?php
-session_start();
-require_once 'unauthorized.php';
+/**
+ * restore_record.php
+ * Reverses the cancellation of a record.
+ */
 
+require __DIR__ . '/app/bootstrap.php';
+
+// Access Control
+require_login();
+
+// Critical actions must be via POST and verified with CSRF
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    die('Invalid request method.');
+    header('Location: dashboard.php');
+    exit;
 }
 
+csrf_verify();
+
+// Validate Input
 $recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+
 if ($recordId <= 0) {
-    http_response_code(400);
-    die('Invalid record ID.');
+    header('Location: dashboard.php?error=invalid_id');
+    exit;
 }
 
-$conn = new mysqli('localhost', 'root', '', 'belge');
-$conn->set_charset('utf8');
+try {
+    // Restore: Clear cancellation flags using the centralized PDO instance
+    $sql = "UPDATE records 
+            SET cancelled = 0, 
+                cancel_reason = NULL, 
+                cancelled_at = NULL, 
+                cancelled_by = NULL 
+            WHERE id = ?";
+            
+    $stmt = $pdo->prepare($sql);
+    $success = $stmt->execute([$recordId]);
 
-if ($conn->connect_error) {
-    die('Database connection failed.');
+    if ($success && $stmt->rowCount() > 0) {
+        header('Location: dashboard.php?status=record_restored');
+    } else {
+        header('Location: dashboard.php?error=not_found');
+    }
+
+} catch (PDOException $e) {
+    // Log error in production: $e->getMessage()
+    header('Location: dashboard.php?error=db_error');
 }
-
-// Restore: remove cancellation flags
-$stmt = $conn->prepare("
-    UPDATE records
-    SET
-        cancelled = 0,
-        cancel_reason = NULL,
-        cancelled_at = NULL,
-        cancelled_by = NULL
-    WHERE id = ?
-");
-$stmt->bind_param('i', $recordId);
-
-$ok = $stmt->execute();
-$stmt->close();
-$conn->close();
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="refresh" content="2;url=dashboard.php">
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <title>Restore Record</title>
-  <style>
-    body { background-color:#f8f9fa; display:flex; justify-content:center; align-items:center; height:100vh; }
-    .message { text-align:center; font-size:1.2rem; font-weight:600; }
-  </style>
-</head>
-<body>
-  <div class="message">
-    <?php if ($ok): ?>
-      <div class="text-success">
-        <i class="fa fa-undo fa-2x"></i><br>
-        Record has been restored successfully.
-      </div>
-      <div class="small text-muted mt-2">Redirecting to dashboard...</div>
-    <?php else: ?>
-      <div class="text-danger">
-        <i class="fa fa-triangle-exclamation fa-2x"></i><br>
-        An error occurred while restoring the record.
-      </div>
-      <div class="small text-muted mt-2">Redirecting to dashboard...</div>
-    <?php endif; ?>
-  </div>
-</body>
-</html>
+exit;

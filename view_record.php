@@ -1,70 +1,106 @@
 <?php
-session_start();
-require_once 'unauthorized.php';
+/**
+ * view_record.php
+ * Lists all uploaded files/documents associated with a specific record.
+ */
 
+require __DIR__ . '/app/bootstrap.php';
+
+// Access Control
+require_login();
+
+// 1. Validate Record ID (Expects POST from Dashboard)
 $recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+
 if ($recordId <= 0) {
-    die("Invalid record ID.");
+    header('Location: dashboard.php?error=invalid_id');
+    exit;
 }
 
-$dirPath = __DIR__ . "/storage/uploads/{$recordId}";
+// 2. Define Directory Path
+$dirPath = __DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . $recordId;
+$hasFiles = false;
+$fileList = [];
+
+// 3. Scan directory if it exists
+if (is_dir($dirPath)) {
+    // Filter out hidden files and directory pointers
+    $fileList = array_values(array_diff(scandir($dirPath), ['.', '..', '.gitkeep', '.DS_Store']));
+    if (count($fileList) > 0) {
+        $hasFiles = true;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>View Files</title>
-<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Documents - Record #<?= $recordId ?></title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #f4f7f6; padding-top: 50px; }
+        .file-card { border-radius: 10px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
 </head>
-<body class="bg-light">
+<body>
 
-<div class="container mt-4">
-    <h4 class="mb-3">📂 Record ID: <?php echo htmlspecialchars((string)$recordId); ?></h4>
-
-<?php
-if (is_dir($dirPath)) {
-    $files = array_values(array_diff(scandir($dirPath), ['.', '..']));
-
-    if (count($files) === 0) {
-        echo '<div class="alert alert-warning">No files found for this record.</div>';
-    } else {
-        echo '<table class="table table-bordered table-striped">';
-        echo '<thead class="thead-dark"><tr><th>File Name</th><th>Action</th></tr></thead><tbody>';
-
-        foreach ($files as $file) {
-            // Basic filename safety
-            $safeFile = basename($file);
-            $fileName = htmlspecialchars($safeFile, ENT_QUOTES);
-
-            $viewUrl = "file.php?action=view&id={$recordId}&name=" . urlencode($safeFile);
-            $downloadUrl = "file.php?action=download&id={$recordId}&name=" . urlencode($safeFile);
-
-            echo "
-            <tr>
-                <td><i class='fa fa-file me-2'></i> {$fileName}</td>
-                <td>
-                    <a class='btn btn-sm btn-primary' href='{$viewUrl}' target='_blank'>
-                        <i class='fa fa-eye'></i> View
-                    </a>
-                    <a class='btn btn-sm btn-success' href='{$downloadUrl}'>
-                        <i class='fa fa-download'></i> Download
-                    </a>
-                </td>
-            </tr>";
-        }
-
-        echo '</tbody></table>';
-    }
-} else {
-    echo '<div class="alert alert-danger">This record does not have any files.</div>';
-}
-?>
-
-    <a href="dashboard.php" class="btn btn-secondary mt-3">
-        <i class="fa fa-arrow-left"></i> Back to Dashboard
-    </a>
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card file-card">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fa-solid fa-folder-open mr-2"></i> Documents for Record #<?= $recordId ?></h5>
+                    <a href="dashboard.php" class="btn btn-outline-light btn-sm">Back to Dashboard</a>
+                </div>
+                <div class="card-body">
+                    <?php if ($hasFiles): ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover mt-3">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Filename</th>
+                                        <th class="text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($fileList as $file): 
+                                        $safeFile = htmlspecialchars($file);
+                                        $viewUrl = "file.php?action=view&id={$recordId}&name=" . urlencode($file);
+                                        $downloadUrl = "file.php?action=download&id={$recordId}&name=" . urlencode($file);
+                                    ?>
+                                        <tr>
+                                            <td class="align-middle">
+                                                <i class="fa-regular fa-file-pdf text-danger mr-2"></i> 
+                                                <strong><?= $safeFile ?></strong>
+                                            </td>
+                                            <td class="text-right">
+                                                <a href="<?= $viewUrl ?>" class="btn btn-primary btn-sm" target="_blank">
+                                                    <i class="fa-solid fa-eye"></i> View
+                                                </a>
+                                                <a href="<?= $downloadUrl ?>" class="btn btn-success btn-sm">
+                                                    <i class="fa-solid fa-download"></i> Download
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-center py-5">
+                            <i class="fa-solid fa-file-circle-exclamation fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No documents have been uploaded for this record yet.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

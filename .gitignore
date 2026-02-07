@@ -1,12 +1,10 @@
-# Uploads (do not commit user files)
-storage/uploads/
-uploads/
+# Database configuration (Şifrelerin gitmemesi için)
+config/config.php
 
-# OS / IDE
+# User uploads (Başkalarının dosyalarını görmemesi için)
+storage/uploads/*
+!storage/uploads/.gitkeep
+
+# System files
 .DS_Store
 Thumbs.db
-.vscode/
-.idea/
-
-# Logs
-*.log

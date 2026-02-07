@@ -1,86 +1,106 @@
 <?php
-session_start();
+/**
+ * login_form.php
+ * The user interface for authenticating into the Record Management System.
+ */
 
-// If already logged in, go to dashboard
-if (isset($_SESSION['user'], $_SESSION['role'])) {
+require __DIR__ . '/app/bootstrap.php';
+
+// Redirect to dashboard if session is already active
+if (!empty($_SESSION['user'])) {
     header('Location: dashboard.php');
     exit;
 }
 
-$showError = isset($_GET['error']) && $_GET['error'] === '1';
+// Error handling based on URL parameters
+$errorMessage = '';
+if (isset($_GET['error'])) {
+    switch ($_GET['error']) {
+        case 'invalid_credentials':
+            $errorMessage = 'Invalid username or password.';
+            break;
+        case 'empty_fields':
+            $errorMessage = 'Please fill in all required fields.';
+            break;
+        case 'unauthorized':
+            $errorMessage = 'Please login to access this area.';
+            break;
+        default:
+            $errorMessage = 'An error occurred. Please try again.';
+    }
+}
 ?>
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta http-equiv="Content-Language" content="en">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Record Manager - Login</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Login - Record Management System</title>
 
-  <!-- Font Awesome -->
-  <script src="https://kit.fontawesome.com/f18df7a83f.js" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <!-- Bootstrap CSS -->
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-
-  <style>
-    body { background: #f8f9fa; }
-    .card-login { max-width: 540px; margin: 6vh auto; }
-    .brandlogo { max-height: 120px; object-fit: contain; margin: 1rem auto 0; display:block; }
-  </style>
+    <style>
+        body { background-color: #f4f7f6; height: 100vh; display: flex; align-items: center; }
+        .login-card { border: none; border-radius: 1rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1); }
+        .card-header { background: #fff; border-bottom: none; border-radius: 1rem 1rem 0 0 !important; }
+        .btn-login { border-radius: 2rem; padding: 0.6rem 2rem; font-weight: 600; }
+    </style>
 </head>
 <body>
 
 <div class="container">
-  <div class="card card-login shadow-sm">
-    <div class="card-body">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card login-card p-4">
+                <div class="card-header text-center pt-4">
+                    <h3 class="text-primary font-weight-bold">Record Manager</h3>
+                    <p class="text-muted small">Authentication Required</p>
+                </div>
+                
+                <div class="card-body">
+                    <?php if ($errorMessage): ?>
+                        <div class="alert alert-danger text-center small" role="alert">
+                            <i class="fas fa-exclamation-circle mr-1"></i> <?= htmlspecialchars($errorMessage) ?>
+                        </div>
+                    <?php endif; ?>
 
-      <!-- Logo (optional) -->
-      <img src="./gazilogo.png" alt="Logo" class="brandlogo">
+                    <form action="login.php" method="POST">
+                        <div class="form-group mb-4">
+                            <label for="username" class="font-weight-bold">Username</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text bg-light border-right-0"><i class="fas fa-user text-muted"></i></span>
+                                </div>
+                                <input type="text" name="username" id="username" class="form-control border-left-0" placeholder="Username" required autofocus>
+                            </div>
+                        </div>
 
-      <form action="login.php" method="post" autocomplete="off" class="mt-3">
+                        <div class="form-group mb-4">
+                            <label for="password" class="font-weight-bold">Password</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text bg-light border-right-0"><i class="fas fa-lock text-muted"></i></span>
+                                </div>
+                                <input type="password" name="password" id="password" class="form-control border-left-0" placeholder="Password" required>
+                            </div>
+                        </div>
 
-        <div class="form-group">
-          <label for="username"><strong>Username</strong></label>
-          <div class="input-group">
-            <div class="input-group-prepend">
-              <span class="input-group-text">User</span>
+                        <button type="submit" class="btn btn-primary btn-block btn-login shadow-sm mt-3">
+                            Sign In <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="card-footer bg-white border-0 text-center pb-4">
+                    <small class="text-muted">&copy; <?= date('Y') ?> Record Management System</small>
+                </div>
             </div>
-            <input id="username" name="username" type="text" class="form-control"
-                   placeholder="Enter your username" required>
-          </div>
         </div>
-
-        <div class="form-group">
-          <label for="password"><strong>Password</strong></label>
-          <div class="input-group">
-            <div class="input-group-prepend">
-              <span class="input-group-text"><i class="fas fa-key"></i></span>
-            </div>
-            <input id="password" name="password" type="password" class="form-control"
-                   placeholder="Enter your password" required>
-          </div>
-        </div>
-
-        <?php if ($showError): ?>
-          <div class="alert alert-danger" role="alert">
-            Invalid username or password.
-          </div>
-        <?php endif; ?>
-
-        <div class="text-right">
-          <button type="submit" class="btn btn-primary">
-            <i class="fas fa-sign-in-alt mr-1"></i> Sign In
-          </button>
-        </div>
-
-      </form>
     </div>
-  </div>
 </div>
 
-<!-- jQuery & Bootstrap Bundle -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
